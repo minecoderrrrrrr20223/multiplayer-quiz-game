@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Quiz Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+            margin: 20px;
+        }
+        h1 {
+            color: #ff6347;
+        }
+        #game {
+            margin-top: 20px;
+            display: none;
+        }
+        .question {
+            margin: 20px;
+        }
+        .options button {
+            margin: 10px;
+        }
+        #scoreboard {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multiplayer Quiz Game</h1>
+    <div id="lobby">
+        <label for="username">Username:</label>
+        <input type="text" id="username" placeholder="Enter your name">
+        <button onclick="joinGame()">Join</button>
+    </div>
+    <div id="game">
+        <h2>Player: <span id="playerName"></span></h2>
+        <div id="question"></div>
+        <div class="options">
+            <button onclick="submitAnswer('a')">a</button>
+            <button onclick="submitAnswer('b')">b</button>
+            <button onclick="submitAnswer('c')">c</button>
+            <button onclick="submitAnswer('d')">d</button>
+        </div>
+    </div>
+    <div id="scoreboard">
+        <h2>Scoreboard</h2>
+        <div id="scores"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let playerName;
+        let scores = {};
+
+        async function fetchQuestion() {
+            const response = await fetch('https://opentdb.com/api.php?amount=1&type=multiple');
+            const data = await response.json();
+            const questionData = data.results[0];
+            return {
+                question: questionData.question,
+                options: {
+                    a: questionData.incorrect_answers[0],
+                    b: questionData.incorrect_answers[1],
+                    c: questionData.incorrect_answers[2],
+                    d: questionData.correct_answer
+                },
+                answer: 'd'  // Assuming correct answer is always 'd'
+            };
+        }
+
+        function joinGame() {
+            playerName = document.getElementById('username').value;
+            if (playerName) {
+                socket.emit('join', playerName);
+                document.getElementById('lobby').style.display = 'none';
+                document.getElementById('game').style.display = 'block';
+                document.getElementById('playerName').innerText = playerName;
+            }
+        }
+
+        function submitAnswer(answer) {
+            socket.emit('answer', answer);
+        }
+
+        socket.on('question', (data) => {
+            document.getElementById('question').innerHTML = `
+                <div class="question">
+                    <p>${data.question}</p>
+                    <button onclick="submitAnswer('a')">${data.options.a}</button>
+                    <button onclick="submitAnswer('b')">${data.options.b}</button>
+                    <button onclick="submitAnswer('c')">${data.options.c}</button>
+                    <button onclick="submitAnswer('d')">${data.options.d}</button>
+                </div>
+            `;
+        });
+
+        socket.on('scoreUpdate', (scores) => {
+            const scoresDiv = document.getElementById('scores');
+            scoresDiv.innerHTML = '';
+            for (const [player, score] of Object.entries(scores)) {
+                scoresDiv.innerHTML += `<p>${player}: ${score}</p>`;
+            }
+        });
+
+        // Mock server-side logic for the demo
+        socket.on('connect', () => {
+            socket.on('join', async (playerName) => {
+                scores[playerName] = 0;
+                console.log(`${playerName} has joined the game`);
+                const question = await fetchQuestion();
+                socket.emit('question', question);
+                socket.emit('scoreUpdate', scores);
+            });
+
+            socket.on('answer', async (answer) => {
+                if (answer === 'd') {
+                    scores[playerName]++;
+                }
+                const question = await fetchQuestion();
+                socket.emit('question', question);
+                socket.emit('scoreUpdate', scores);
+            });
+        });
+    </script>
+</body>
+</html>
